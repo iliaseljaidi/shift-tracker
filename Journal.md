@@ -60,3 +60,32 @@ What I learned today (reflections)?
 ### Why isn't shift duration (hours) stored as a column?
 - Just like total pay, shift duration is a derived value that can be calculated directly from `start_time` and `end_time`
 - If you store `hours` separately and someone later updates the `end_time`, the stored `hours` become wrong—computing it dynamically ensures it's always accurate
+
+## Mission 2: Accept a shift, POST (9 Nov 2026)
+
+What I built:
+- schemas.py with two Pydantic schemas: ShiftCreate (incoming data) and ShiftOut (outgoing data, adds the id)
+- main.py with a POST /shifts endpoint that validates a shift, saves it to SQLite and returns it with status 201
+- create_all runs on startup, so the shifts table is built automatically
+- Tested it in /docs: a valid shift returned 201 with an id, and I checked the row in shifts.db with sqlite3
+- Tested it in /docs: a valid shift returned 201 with an id, and a negative rate returned 422 naming the hourly_rate field
+- Restarted the server and checked shifts.db with sqlite3: the row was still there
+
+What confused me:
+- I wrote Field(default=0) for hourly_rate, which makes the field optional and lets bad rates through instead of rejecting them
+- I used underscore_attrs_are_private in model_config instead of from_attributes
+- I could not find "the docs" at first. The /docs page was already open, and I had to click the POST /shifts bar, then Try it out
+
+How I fixed it:
+- Changed the rate to Field(gt=0), which makes it required and rejects 0 or negative values
+- Changed model_config to ConfigDict(from_attributes=True) so Pydantic can read a SQLAlchemy object
+- Learned that the green POST /shifts bar on /docs is where you test the endpoint
+## Reflections
+
+- Why is it better to validate input at the edge than inside the database?
+
+Validating at the edge (using Pydantic/FastAPI) catches bad data immediately before it ever hits your application logic or database. It saves database resources, provides clear, human-readable error messages back to the user instantly, and prevents corrupted or invalid data states from ever being stored.
+
+- What does commit do? What happens if you forget it?
+
+commit() tells the database session to permanently save your changes to disk. If you forget it, the transaction remains pending or gets rolled back when the session closes, meaning your changes disappear and the database file won't actually contain the new data.
