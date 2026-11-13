@@ -89,3 +89,33 @@ Validating at the edge (using Pydantic/FastAPI) catches bad data immediately bef
 - What does commit do? What happens if you forget it?
 
 commit() tells the database session to permanently save your changes to disk. If you forget it, the transaction remains pending or gets rolled back when the session closes, meaning your changes disappear and the database file won't actually contain the new data.
+
+## Mission 3: Read shifts, GET (13 Nov 2026)
+
+What I built:
+- GET /shifts, which returns every shift as a list, newest first, using order_by with desc() on shift_date
+- GET /shifts/{shift_id}, which returns one shift by id using a path parameter and db.get
+- A 404 with the message "Shift not found" when the id does not exist, raised with HTTPException
+- Tested in /docs with shifts posted on jumbled dates: (CONFIRM: newest first? /shifts/999 gave 404?)
+
+What confused me:
+- I had to remember how to open /docs and post test shifts again before I could test anything
+- (add anything else that tripped you up while writing the endpoints)
+
+How I fixed it (and which hint level I needed):
+- Did my research first and answered the check questions: GET is the read method, list[schemas.ShiftOut] is a list response, db.get returns None when nothing matches, and HTTPException takes a status_code and a detail
+- Tried to write the endpoints myself first, then asked for the full code and typed it out
+
+One thing I would do differently (Missions 0 to 3):
+- Check whether I am in the terminal or the file editor before typing, and read each schema rule carefully (Field(default=0) let bad rates through instead of rejecting them)
+
+Interview story (problem, action, result):
+- My API accepted shifts with a rate of 0 because I used Field(default=0) instead of Field(gt=0). I tested a negative rate in /docs, read the 422 error, and fixed the rule, so now invalid rates are rejected before they reach the database.
+
+## Reflections
+
+### Why return 404 instead of an empty object when an id is missing?
+- A 404 clearly says that the shift does not exist, whereas an empty object could look like a valid response with missing data or create ambiguity about whether the resource genuinely doesn't exist or if a query filter returned zero results
+
+### What happens to the list endpoint with 100,000 shifts? How might I fix it?
+- It would try to return 100,000 records at once, exhausting server memory, creating a massive JSON payload, and slowing down response times, and the fix is pagination using limit and offset query parameters.
