@@ -119,3 +119,22 @@ Interview story (problem, action, result):
 
 ### What happens to the list endpoint with 100,000 shifts? How might I fix it?
 - It would try to return 100,000 records at once, exhausting server memory, creating a massive JSON payload, and slowing down response times, and the fix is pagination using limit and offset query parameters.
+
+## Mission 4: Fix mistakes, PUT and DELETE (14 Nov 2026)
+
+What I built:
+- PUT /shifts/{shift_id}, which replaces a shift's data with new data and returns the updated shift
+- DELETE /shifts/{shift_id}, which removes a shift and returns 204 with no body
+- Both return 404 when the shift id does not exist
+- Tested in /docs: (CONFIRM: did a PUT change the rate, and did a GET confirm it? Did GET on a deleted id give 404? Did PUT and DELETE on 999 give 404?)
+
+What confused me:
+- When I pasted my code, three extra lines ended up flush left at the bottom of main.py, outside any function. Python runs those when the file loads, so they would have crashed the server on startup
+- (add anything else, for example the indentation or how setattr works)
+
+How I fixed it (and which hint level I needed):
+- Removed the stray lines so the file ended with db.commit() inside delete_shift
+- Wrote the endpoints myself first, then checked them against the expected structure
+
+The line I wrote three times:
+- The find-or-404 block (db.get, then if shift is None, raise HTTPException 404) appears in get_shift, update_shift and delete_shift. I will replace it with one helper in Mission 6
