@@ -29,3 +29,22 @@ def get_shift(shift_id: int, db: Session = Depends(get_db)):
     if shift is None:
         raise HTTPException(status_code=404, detail="Shift not found")
     return shift
+
+@app.put("/shifts/{shift_id}", response_model=schemas.ShiftOut)
+def update_shift(shift_id: int, data: schemas.ShiftCreate, db: Session = Depends(get_db)):
+    shift = db.get(models.Shift, shift_id)
+    if shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    for key, value in data.model_dump().items():
+        setattr(shift, key, value)
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+@app.delete("/shifts/{shift_id}", status_code=204)
+def delete_shift(shift_id: int, db: Session = Depends(get_db)):
+    shift = db.get(models.Shift, shift_id)
+    if shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    db.delete(shift)
+    db.commit()
