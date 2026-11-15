@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import models
+import datetime
 import schemas
 from database import engine, get_db
 
@@ -48,3 +49,20 @@ def delete_shift(shift_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Shift not found")
     db.delete(shift)
     db.commit()
+
+@app.get("/summary/weekly")
+def weekly_summary(week_start: datetime.date, db: Session = Depends(get_db)):
+    week_end = week_start + datetime.timedelta(days=7)
+    shifts = (
+        db.query(models.Shift)
+        .filter(models.Shift.shift_date >= week_start,
+                models.Shift.shift_date < week_end)
+        .all()
+    )
+    outs = [schemas.ShiftOut.model_validate(s) for s in shifts]
+    return {
+        "week_start": week_start,
+        "shifts": len(outs),
+        "total_hours": round(sum(o.hours for o in outs), 2),
+        "total_pay": round(sum(o.pay for o in outs), 2),
+    }
