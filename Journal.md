@@ -138,3 +138,44 @@ How I fixed it (and which hint level I needed):
 
 The line I wrote three times:
 - The find-or-404 block (db.get, then if shift is None, raise HTTPException 404) appears in get_shift, update_shift and delete_shift. I will replace it with one helper in Mission 6
+
+## Mission 6: Lock it down, login and privacy (16 Nov 2026)
+
+What I built:
+- 6a: a User table (id, unique email, password_hash) and a user_id foreign key on Shift. I deleted shifts.db once so create_all could rebuild the tables
+- 6b: auth.py with hash_password, verify_password and create_token (2 hour expiry), plus POST /register and POST /login
+- 6c: get_current_user, which reads the token, decodes it, loads the user and returns 401 if anything fails. Every shift endpoint and the weekly summary now depends on it
+- A get_own_shift helper that replaced the find-or-404 block I had written three times, and returns 404 when a shift is missing or belongs to someone else
+- create_shift sets user_id from the logged-in user, and list and summary queries filter by user_id
+- SECRET_KEY is read from an environment variable with os.getenv, with a development-only fallback
+
+What confused me:
+- The login form calls the email field "username". That is part of the OAuth2 standard, so I put my email in it
+- Why shifts.db had to be deleted: create_all only builds missing tables and never changes an existing one, so the old shifts table had no user_id column
+- (add anything else that tripped you up)
+
+How I tested it:
+- Registering twice with the same email gave 400, a short password gave 422, a wrong password and an unknown email both gave 401 with the same message, and a right password gave a token
+- The database stores an argon2 hash, never the real password
+- Without a token, GET /shifts gave 401
+- The attack: I registered a second account (B) and tried to use account A's shift. B's GET /shifts returned an empty list, and GET, PUT and DELETE on A's shift id all gave 404. A's shift was unchanged in the database afterwards (still Test Bar at 14.5)
+- B could post and list their own shifts. In the same week as A's 6 hour shift, B's weekly summary counted only B's own shift (1 shift, 5.0 hours, 50.0 pay)
+
+Things I noticed:
+- A 422 validation error echoes the submitted password in its input field. FastAPI does this by default, and I want to look up how to hide it
+- My first automated test could not prove privacy, because with one user's data in the database "only your shifts" looks the same as "all the shifts". A second account was needed
+- My test accounts and shifts stay in shifts.db, which is why Mission 7 uses a temporary database
+
+How I fixed it (and which hint level I needed):
+- (add which parts you tried yourself first and where you asked for the full code)
+
+## Reflections
+
+### Why is 404 better than 403 when someone requests another user's shift?
+-A 403 Forbidden response explicitly tells an attacker: "This resource exists, but you aren't allowed to see it." This confirms that the resource ID (e.g., a specific shift ID or user ID) is valid, allowing attackers to easily scan and enumerate valid IDs
+
+### What would an attacker gain if they stole the SECRET_KEY?
+-If an attacker manages to steal the SECRET_KEY, they gain the catastrophic ability to cryptographically forge and sign valid authentication tokens or session cookies for any account in the system. Because the secret key is what validates the authenticity of these tokens, having it allows the attacker to craft custom payloads, instantly elevate their privileges to administrator status, and impersonate any user without needing their credentials. If that same key is also used for symmetric encryption, they could read and tamper with any encrypted data stored within sessions
+
+### If a token is stolen, what limits the damage? What would a real production system add?
+-When a token is stolen, the immediate damage is primarily limited by enforcing short expiration times and adhering to the principle of least privilege through strict permission scopes. However, a real-world production system goes much further by implementing advanced security measures like refresh token rotation, which invalidates token families if a reuse attempt is detected, and fast Redis-backed revocation blacklists for immediate logout handling. Additionally, production systems use contextual anomaly detection to spot sudden shifts in IP addresses, geolocations, or user agents, triggering step-up authentication or blocking suspicious sessions entirely
