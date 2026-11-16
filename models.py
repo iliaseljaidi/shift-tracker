@@ -1,9 +1,16 @@
 import datetime
-from sqlalchemy import String, Text
+from sqlalchemy import String, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
 
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
 
 class Shift(Base):
     __tablename__ = "shifts"
@@ -15,3 +22,4 @@ class Shift(Base):
     end_time: Mapped[datetime.time] = mapped_column()
     hourly_rate: Mapped[float] = mapped_column()
     notes: Mapped[str | None] = mapped_column(Text)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))

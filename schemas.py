@@ -11,7 +11,6 @@ class ShiftCreate(BaseModel):
     hourly_rate: float = Field(gt=0)
     notes: str | None = None
 
-
 class ShiftOut(ShiftCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -25,3 +24,11 @@ class ShiftOut(ShiftCreate):
     @property
     def pay(self) -> float:
         return round(self.hours * self.hourly_rate, 2)
+
+class UserCreate(BaseModel):
+    email: str
+    password: str = Field(min_length=8)
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
