@@ -51,3 +51,13 @@ def test_users_cannot_see_each_others_shifts():
 
     assert client.get("/shifts", headers=b).json() == []
     assert client.get(f"/shifts/{shift_id}", headers=b).status_code == 404
+
+def test_requires_login():
+    response = client.get("/shifts")
+    assert response.status_code == 401
+
+def test_negative_rate_rejected():
+    headers = create_auth_header(client)
+    bad = {**SHIFT, "hourly_rate": -5}
+    response = client.post("/shifts", json=bad, headers=headers)
+    assert response.status_code == 422
