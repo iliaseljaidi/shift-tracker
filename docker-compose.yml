@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=change-this-to-a-long-random-string
+      - DATABASE_URL=sqlite:////app/data/shifts.db
+    volumes:
+      - ./data:/app/data
