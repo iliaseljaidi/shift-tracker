@@ -2,7 +2,7 @@
 
 A REST API for anyone that's struggling to log shifts and see hours and pay, including overnight shifts, with private accounts so each user only sees their own data.
 
-**Live demo:** https://YOUR-APP.onrender.com/docs *(free hosting: the app sleeps when idle and the database resets on redeploy)*
+**Live demo:** https://shift-tracker-ngzp.onrender.com/docs (free hosting: the app sleeps when idle and the database resets on redeploy)*
 
 ![API docs](docs/screenshot.png)
 
