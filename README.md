@@ -4,7 +4,7 @@ A REST API for anyone that's struggling to log shifts and see hours and pay, inc
 
 **Live demo:** https://YOUR-APP.onrender.com/docs *(free hosting: the app sleeps when idle and the database resets on redeploy)*
 
-![API docs](docs/screenshot.png)
+![API docs](docs/API.png)
 
 ## Features
 
