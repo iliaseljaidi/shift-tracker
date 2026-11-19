@@ -139,43 +139,169 @@ How I fixed it (and which hint level I needed):
 The line I wrote three times:
 - The find-or-404 block (db.get, then if shift is None, raise HTTPException 404) appears in get_shift, update_shift and delete_shift. I will replace it with one helper in Mission 6
 
+## Mission 5: The overnight problem, hours, pay and summaries (15 Nov 2026)
+
+What I built:
+- calc.py with shift_hours(), which turns both times into minutes since midnight and adds 24 hours when the end is earlier than the start
+- hours and pay as computed fields on the outgoing schema, rounded to 2 decimals and never stored in the database
+- GET /summary/weekly, which returns the number of shifts, total hours and total pay for the 7 days from a start date
+- Tested it: a 22:00 to 04:00 shift at 14.50 came back as 6 hours and 87.0 pay, and the weekly summary only counted shifts inside the 7 days
+
+What confused me:
+- Where the weekly summary code went in main.py. I also forgot that it needed import datetime at the top
+- I pasted the word "python" from a code block into my file by mistake, which would have crashed the server
+
+How I fixed it (and which hint level I needed):
+- Asked where the function belonged, added the import, and removed the stray word. I asked for the full answer after trying the steps myself first
+
+Decision I made:
+- A shift that starts and ends at the same time: 0 hours. If someone puts 09:00 to 09:00, that is either a mistake or a zero-length shift, not someone working a full 24 hours straight. Counting it as 24 hours would inflate pay way too easily.
+
+A mismatch I found later (19 Nov 2026):
+- My journal said 0 hours for equal times, but my code counted them as 24, because the condition was end_min <= start_min. Writing it down made me check. I changed <= to <, added test_same_start_and_end, and watched it fail with 24.0 == 0 before the fix. The suite is now 8 tests
+
+One thing I would do differently:
+- Read the pasted code block carefully before copying, so labels and stray lines do not end up in the file
+
+### Reflections
+- Why is calculating hours safer than storing them?
+  - If I store hours in the database and later edit a shift's start or end time, the stored hours can easily go out of sync. Calculating them from the start and end times means there is only one source of truth and I don't store duplicate data.
+- What bugs might appear when the clocks change at 01:00 or 02:00 in spring or autumn? (I only had to notice this, not fix it)
+  - Because shift_hours() only looks at raw clock times and doesn't know about timezones or daylight saving, a spring clock change would add an extra hour by mistake (overcounting by 1 hour) and an autumn clock change would lose an hour (undercounting by 1 hour).
+
 ## Mission 6: Lock it down, login and privacy (16 Nov 2026)
 
 What I built:
 - 6a: a User table (id, unique email, password_hash) and a user_id foreign key on Shift. I deleted shifts.db once so create_all could rebuild the tables
 - 6b: auth.py with hash_password, verify_password and create_token (2 hour expiry), plus POST /register and POST /login
 - 6c: get_current_user, which reads the token, decodes it, loads the user and returns 401 if anything fails. Every shift endpoint and the weekly summary now depends on it
-- A get_own_shift helper that replaced the find-or-404 block I had written three times, and returns 404 when a shift is missing or belongs to someone else
+- A get_own_shift helper that replaced the find-or-404 block I had written three times. It returns 404 when a shift is missing or belongs to someone else
 - create_shift sets user_id from the logged-in user, and list and summary queries filter by user_id
 - SECRET_KEY is read from an environment variable with os.getenv, with a development-only fallback
 
 What confused me:
 - The login form calls the email field "username". That is part of the OAuth2 standard, so I put my email in it
 - Why shifts.db had to be deleted: create_all only builds missing tables and never changes an existing one, so the old shifts table had no user_id column
-- (add anything else that tripped you up)
 
 How I tested it:
 - Registering twice with the same email gave 400, a short password gave 422, a wrong password and an unknown email both gave 401 with the same message, and a right password gave a token
 - The database stores an argon2 hash, never the real password
 - Without a token, GET /shifts gave 401
+- I also had Claude Code run 13 checks with curl, and all passed. It pointed out that they could not prove privacy yet, because only one user's data existed
 - The attack: I registered a second account (B) and tried to use account A's shift. B's GET /shifts returned an empty list, and GET, PUT and DELETE on A's shift id all gave 404. A's shift was unchanged in the database afterwards (still Test Bar at 14.5)
-- B could post and list their own shifts. In the same week as A's 6 hour shift, B's weekly summary counted only B's own shift (1 shift, 5.0 hours, 50.0 pay)
+- In the same week as A's 6 hour shift, B's weekly summary counted only B's own shift (1 shift, 5.0 hours, 50.0 pay)
 
 Things I noticed:
 - A 422 validation error echoes the submitted password in its input field. FastAPI does this by default, and I want to look up how to hide it
-- My first automated test could not prove privacy, because with one user's data in the database "only your shifts" looks the same as "all the shifts". A second account was needed
 - My test accounts and shifts stay in shifts.db, which is why Mission 7 uses a temporary database
 
+One thing I would do differently:
+- Test with two accounts from the start. One user's data cannot show whether privacy works
+
+### Reflections
+- Why is 404 better than 403 when someone requests another user's shift?
+  - 403 tells an attacker that the shift exists even though they aren't allowed to see it. 404 doesn't give away whether that shift ID exists at all.
+- What would an attacker gain if they stole the SECRET_KEY?
+  - They could sign their own tokens for any user ID without needing a password, so they could act as any user and read or change their shifts.
+- If a token is stolen, what limits the damage? What would a real production system add?
+  - The 2-hour expiry limits how long a stolen token works. In a real production system I'd use shorter-lived access tokens with refresh tokens, a way to revoke tokens, and safer storage like HTTP-only cookies over HTTPS.
+
+## Mission 7: Prove it works, automated tests (17 Nov 2026)
+
+What I built:
+- Unit tests for shift_hours (normal, overnight and half-hour shifts)
+- API tests that use a temporary in-memory SQLite database (StaticPool) swapped in with app.dependency_overrides, so they never touch shifts.db
+- An autouse fixture that drops and recreates all tables before every test
+- A create_auth_header helper that registers, logs in and returns the Authorization header
+- Tests for create and list, login required (401), negative rate rejected (422), and a two-user security test. 7 tests in total, all passing
+
+What confused me:
+- Python import syntax. I wrote "import X from Y", but Python needs "from Y import X"
+- The yield in a fixture. Everything before it runs before the test and everything after it runs after, so my first version dropped the tables and then built them too late
+- pytest ran only 3 tests because I had named the file tests_api.py. It only collects files starting with test_, and it gave no error
+- My first security assert compared B's list to a list that contained the 404 response, so it was checking the wrong thing. It needed to check that B's list is empty
+- An IndentationError when I commented out the only line inside an if, and "None == 8" failures when the return line ended up in the wrong place
+
 How I fixed it (and which hint level I needed):
-- (add which parts you tried yourself first and where you asked for the full code)
+- Renamed the file to test_api.py, removed the yield, and changed the assert to == []
 
-## Reflections
+Breaking it on purpose:
+- Changing the overnight rule to end_min += 0 made the overnight shift test fail
+- Removing the user_id filter made the security test fail, because B's list contained A's shift. My first version of that test would not have caught it
+- Changing Field(gt=0) to Field(default=0) made test_negative_rate_rejected fail, because a negative rate was accepted with 201 instead of 422
+- Checking user and shift counts in shifts.db before and after pytest showed they did not change (3 and 3)
 
-### Why is 404 better than 403 when someone requests another user's shift?
--A 403 Forbidden response explicitly tells an attacker: "This resource exists, but you aren't allowed to see it." This confirms that the resource ID (e.g., a specific shift ID or user ID) is valid, allowing attackers to easily scan and enumerate valid IDs
+Things I noticed:
+- InsecureKeyLengthWarning: my fallback SECRET_KEY is only 18 bytes, and PyJWT recommends 32 or more
+- A deprecation warning about httpx and the Starlette TestClient
 
-### What would an attacker gain if they stole the SECRET_KEY?
--If an attacker manages to steal the SECRET_KEY, they gain the catastrophic ability to cryptographically forge and sign valid authentication tokens or session cookies for any account in the system. Because the secret key is what validates the authenticity of these tokens, having it allows the attacker to craft custom payloads, instantly elevate their privileges to administrator status, and impersonate any user without needing their credentials. If that same key is also used for symmetric encryption, they could read and tamper with any encrypted data stored within sessions
+One thing I would do differently:
+- Check that pytest is collecting every test file (python -m pytest -v) before assuming all my tests ran
 
-### If a token is stolen, what limits the damage? What would a real production system add?
--When a token is stolen, the immediate damage is primarily limited by enforcing short expiration times and adhering to the principle of least privilege through strict permission scopes. However, a real-world production system goes much further by implementing advanced security measures like refresh token rotation, which invalidates token families if a reuse attempt is detected, and fast Redis-backed revocation blacklists for immediate logout handling. Additionally, production systems use contextual anomaly detection to spot sudden shifts in IP addresses, geolocations, or user agents, triggering step-up authentication or blocking suspicious sessions entirely
+### Reflections
+- Which test would catch the bug I am most afraid of? Did I write it?
+  - test_users_cannot_see_each_others_shifts. Leaking one person's shifts or pay to another user would break privacy completely, and I wrote that test and saw it fail when I removed the user_id filter.
+- Why must each test start with a fresh database?
+  - If old rows stay around from an earlier test, tests can interfere with each other and pass or fail depending on the order they run. Starting fresh keeps every test clean and repeatable.
+
+## Mission 8: Package it, Docker (17 Nov 2026)
+
+What I built:
+- A Dockerfile: Python 3.14 slim image, requirements.txt copied and installed first, then the code, then uvicorn started on 0.0.0.0 port 8000
+- A .dockerignore that keeps venv, caches, database files, .git, tests and .env out of the image
+- A docker-compose.yml that builds the image, maps port 8000, sets SECRET_KEY and DATABASE_URL, and mounts ./data to /app/data so the database survives restarts
+- Result: docker compose up --build started the app, /docs loaded, I registered, logged in and posted a 22:00 to 04:00 shift (6 hours, 87 pay)
+- After stopping and starting again, the shift was still there, and data/shifts.db was on my Mac
+
+What confused me:
+- The whole idea at first. The meal-kit comparison helped: a Dockerfile is the recipe, an image is the finished kit and a container is one meal cooked from it
+- docker info showed a client section but failed to connect to the server, because Docker Desktop was installed but not running
+- A container called welcome-to-docker was already running. It is Docker Desktop's demo and uses port 8088, so it did not clash with my app
+- In the compose file, spaces after the = signs would have become part of the values, and mounting a single file can make Docker create a folder in its place. I mounted the whole data folder instead
+
+How I fixed it (and which hint level I needed):
+- Opened Docker Desktop and waited until it was running, removed the spaces, and changed the volume to ./data:/app/data
+
+Things I noticed:
+- The build context was only about 35 kB, which shows .dockerignore kept my venv out
+- The SECRET_KEY in the compose file is only a placeholder. The real key must be set on the host and never committed
+
+One thing I would do differently:
+- Check that the Docker engine is running (docker info) before writing any files
+
+### Reflections
+- What is the difference between an image and a container?
+  - An image is the packaged template with the app code, dependencies, and runtime, like the meal kit. A container is an actual running instance of that image doing work.
+- Why shouldn't the secret key be written in the Dockerfile?
+  - Anything put in the Dockerfile ends up inside the image layers and can be inspected. The real secret key should be passed in as an environment variable at runtime, not baked into the image or repo.
+
+## Mission 9: Ship it, README, CI, deploy and CV (18 Nov 2026)
+
+What I built:
+- A GitHub Actions workflow (.github/workflows/tests.yml) that installs requirements and runs pytest on every push. The first run passed with 7 tests on Python 3.14.10
+- A README with a summary, features, tech used, how to run locally and with Docker, an endpoints table, a screenshot of /docs (docs/API.png) and what I learned
+- A live deployment on Render using the Docker runtime and a long random SECRET_KEY set in Render's settings, with /docs loading at a public URL
+- Pinned the repo on GitHub and added the project to LinkedIn and my CV
+
+What confused me:
+- The live site showed {"detail":"Not Found"} at the bare URL. That is normal, because the app has no page at "/" and the docs are at /docs
+- GitHub showed a Node.js 20 deprecation warning and an ubuntu-latest migration notice on the first CI run. They did not stop it from passing
+- A divergent branches error when I pushed. I had edited the README on GitHub (the live link) while also committing on my Mac, so Git would not guess how to join them
+- .DS_Store files appeared as untracked files. I had to write the name with the capital S and no trailing slash to ignore them
+
+How I fixed it (and which hint level I needed):
+- Looked at the history with git log --graph, checked the GitHub commit with git show, then merged with git pull --no-rebase. The merge was clean and I did not force anything
+- Added .DS_Store to .gitignore and committed the screenshot and README together
+
+Things I noticed:
+- On free hosting the app sleeps when idle and the SQLite database resets on every redeploy. That is fine for a demo, and I say so in the README
+
+One thing I would do differently:
+- Run git pull before starting work, and avoid editing files on GitHub while I am also committing locally
+
+### Reflections
+- Which decision in this project am I proudest of, and why?
+  - Using get_own_shift and writing test_users_cannot_see_each_others_shifts so privacy wasn't just assumed. It was enforced in one place and proven by an automated test.
+- What would I build next, and what would I do differently if I started again?
+  - Next I'd move to PostgreSQL with proper migrations so data survives redeploys, and handle timezones properly. Starting over, I'd write automated tests and multi-user checks earlier instead of leaving them until later missions.
+
