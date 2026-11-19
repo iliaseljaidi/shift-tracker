@@ -305,3 +305,8 @@ One thing I would do differently:
 - What would I build next, and what would I do differently if I started again?
   - Next I'd move to PostgreSQL with proper migrations so data survives redeploys, and handle timezones properly. Starting over, I'd write automated tests and multi-user checks earlier instead of leaving them until later missions.
 
+
+### reason for building this project:
+- I used to work as a door supervisor, and working out my pay by hand was a pain, especially on night shifts like 10pm to 4am where the end time is earlier than the start. I was also studying Python and SQLite, so I decided to build something real for myself instead of doing exercises
+I built a REST API with FastAPI. It tracks shifts, calculates hours and pay, handles overnight shifts, and gives a weekly summary. Users register and log in, passwords are hashed with argon2, and each user can only see their own data. I tested that with a second account and with an automated test. I also wrote tests that run on every push with GitHub Actions, packaged it with Docker, and deployed it online.
+It’s a simple app, but it could be the back end of a bigger one with a proper front end. If I started again, I’d write the tests earlier. I only proved the privacy properly once I had two accounts.
